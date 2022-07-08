@@ -264,6 +264,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out, char *msg)
 	fputs(" -d, --delay <secs>  delay updates\n", out);
 	fputs(" -o, --once          only display average irq once, then exit\n", out);
 	fputs(" -s, --sort <char>   specify sort criteria by character (see below)\n", out);
+	fputs(" -f, --filter <char>   specify sort criteria by character (see below)\n", out);
 
 	fputs("\nThe following are valid sort criteria:\n", out);
 	fputs(" c: sort by increase count of each interrupt\n", out);
@@ -315,9 +316,11 @@ int main(int argc, char *argv[])
 	struct irq_stat *stat, *last_stat = NULL;
 	double uptime_secs = 1;
 	int retval = EXIT_SUCCESS;
+    char *filter = NULL;
 
 	static const struct option longopts[] = {
 		{ "delay",	required_argument, NULL, 'd' },
+		{ "filter",	required_argument, NULL, 'f' },
 		{ "sort",	required_argument, NULL, 's' },
 		{ "once",	no_argument,	   NULL, 'o' },
 		{ "help",	no_argument,	   NULL, 'h' },
@@ -329,7 +332,7 @@ int main(int argc, char *argv[])
 	program = argv[0];
 	sort_func = DEF_SORT_FUNC;
 
-	while ((o = getopt_long(argc, argv, "d:os:hV", longopts, NULL)) != -1) {
+	while ((o = getopt_long(argc, argv, "d:f:os:hV", longopts, NULL)) != -1) {
 		switch (o) {
 		case 'd':
 			errno = 0;
@@ -337,6 +340,8 @@ int main(int argc, char *argv[])
 			if (delay < 1)
 				usage(stderr, "delay must be positive integer\n");
 			break;
+        case 'f':
+            filter = optarg;
 		case 's':
 			sort_func = (int (*)(const struct irq_info*,
 				const struct irq_info *)) set_sort_func(optarg[0]);
@@ -442,12 +447,22 @@ int main(int argc, char *argv[])
 		}
 
 		/* okay, sort and show the result */
-		sort_result(result, stat->nr_irq);
-		for (i = 0; i < MIN(rows - RESERVE_ROWS, stat->nr_irq); i++) {
-			curr = result + i;
-			print_line("%4s   %10ld   %s", curr->irq, curr->count,
-					curr->desc);
-		}
+        sort_result(result, stat->nr_irq);
+        if (filter != NULL) {
+            for (i = 0; i < stat->nr_irq; i++) {
+                curr = result + i;
+                if (!strstr(curr->desc, filter))
+                    continue;
+                print_line("%4s   %10ld   %s", curr->irq, curr->count,
+                        curr->desc);
+            }
+        } else {
+            for (i = 0; i < MIN(rows - RESERVE_ROWS, stat->nr_irq); i++) {
+                curr = result + i;
+                print_line("%4s   %10ld   %s", curr->irq, curr->count,
+                        curr->desc);
+            }
+        }
 		free(result);
 
 		if (run_once) {
